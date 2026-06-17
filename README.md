@@ -54,8 +54,20 @@ npm run dev          # Start dev server with hot reload
 npm run build        # Build for production
 npm start            # Run production build
 
+# Testing
+npm test             # Run unit tests with Jest (watch mode: npm run test:watch)
+npm run test:e2e     # Run end-to-end tests with Playwright
+
+# Type Checking
+npm run typecheck    # Run TypeScript type checking (tsc --noEmit)
+
 # Code Quality
-npm run lint         # Check code quality with ESLint
+npm run lint         # Lint all TypeScript files with ESLint
+npm run format:check # Check formatting with Prettier
+npm run format       # Auto-fix formatting with Prettier
+
+# Accessibility
+npm run audit:a11y   # Run accessibility audit
 ```
 
 ## Project Structure
