@@ -13,7 +13,7 @@
  */
 
 import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { devtools, persist } from "zustand/middleware";
 
 // ─── Toast types ──────────────────────────────────────────────────────────────
 
@@ -54,6 +54,9 @@ interface UIState {
   /** True while a global loading spinner should be shown */
   isGlobalLoading: boolean;
   globalLoadingMessage: string | null;
+  /** Global settings for accessibility and comfort */
+  soundEnabled: boolean;
+  reducedMotion: boolean;
 }
 
 interface UIActions {
@@ -82,6 +85,11 @@ interface UIActions {
 
   showGlobalLoading: (message?: string) => void;
   hideGlobalLoading: () => void;
+
+  // ── Settings ──────────────────────────────────────────────────────────────
+
+  setSoundEnabled: (enabled: boolean) => void;
+  setReducedMotion: (reduced: boolean) => void;
 }
 
 export type UIStore = UIState & UIActions;
@@ -103,19 +111,29 @@ const defaultModals = Object.fromEntries(ALL_MODALS.map((id) => [id, { isOpen: f
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
+const getInitialReducedMotion = () => {
+  if (typeof window !== "undefined") {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  return false;
+};
+
 const initialState: UIState = {
   modals: defaultModals,
   toasts: [],
   isGlobalLoading: false,
   globalLoadingMessage: null,
+  soundEnabled: true,
+  reducedMotion: getInitialReducedMotion(),
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useUIStore = create<UIStore>()(
   devtools(
-    (set) => ({
-      ...initialState,
+    persist(
+      (set) => ({
+        ...initialState,
 
       // ── Modals ──────────────────────────────────────────────────────────────
 
@@ -181,9 +199,24 @@ export const useUIStore = create<UIStore>()(
 
       hideGlobalLoading: () =>
         set({ isGlobalLoading: false, globalLoadingMessage: null }, false, "ui/hideGlobalLoading"),
+
+      // ── Settings ─────────────────────────────────────────────────────────────
+
+      setSoundEnabled: (enabled) =>
+        set({ soundEnabled: enabled }, false, "ui/setSoundEnabled"),
+
+      setReducedMotion: (reduced) =>
+        set({ reducedMotion: reduced }, false, "ui/setReducedMotion"),
     }),
-    { name: "UIStore" },
+    {
+      name: "ui-store",
+      partialize: (state) => ({
+        soundEnabled: state.soundEnabled,
+        reducedMotion: state.reducedMotion,
+      }),
+    },
   ),
+  { name: "UIStore" },
 );
 
 // ─── Selectors ────────────────────────────────────────────────────────────────
@@ -192,3 +225,5 @@ export const selectModal = (id: ModalId) => (state: UIStore) => state.modals[id]
 export const selectToasts = (state: UIStore) => state.toasts;
 export const selectIsGlobalLoading = (state: UIStore) => state.isGlobalLoading;
 export const selectGlobalLoadingMessage = (state: UIStore) => state.globalLoadingMessage;
+export const selectSoundEnabled = (state: UIStore) => state.soundEnabled;
+export const selectReducedMotion = (state: UIStore) => state.reducedMotion;

@@ -5,6 +5,8 @@
  * Handles loading, playing, and managing audio files.
  */
 
+import { useUIStore } from "../stores/useUIStore";
+
 export type SoundEffect =
   | "levelUp"
   | "achievement"
@@ -18,11 +20,17 @@ export type SoundEffect =
 class SoundManager {
   private sounds: Map<SoundEffect, HTMLAudioElement> = new Map();
   private enabled: boolean = true;
-  private volume: number = 0.5;
+  private volume: number = 0.2;
 
   constructor() {
     if (typeof window !== "undefined") {
       this.initializeSounds();
+      
+      // Sync with store
+      this.enabled = useUIStore.getState().soundEnabled;
+      useUIStore.subscribe((state) => {
+        this.enabled = state.soundEnabled;
+      });
     }
   }
 
