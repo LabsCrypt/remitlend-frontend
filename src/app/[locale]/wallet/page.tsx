@@ -16,9 +16,11 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { PaginationControls } from "../../components/ui/PaginationControls";
-import { Spinner } from "../../components/global_ui/Spinner";
+import { Skeleton } from "../../components/ui/Skeleton";
 import { TransactionsSkeleton } from "../../components/skeletons/TransactionsSkeleton";
-import { ErrorBoundary } from "../../components/global_ui/ErrorBoundary";
+import { QueryErrorBoundary } from "../../components/global_ui/ErrorBoundary";
+import { QueryError } from "../../components/ui/QueryError";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { downloadCsv, rowsToCsv } from "../../utils/csv";
 import {
   useWalletStore,
@@ -94,6 +96,7 @@ function useHorizonBalances(address: string, horizonUrl: string) {
     },
     staleTime: 30_000,
     retry: 2,
+    throwOnError: true,
   });
 }
 
@@ -129,6 +132,7 @@ function useHorizonPayments(address: string, horizonUrl: string, cursor: string 
     staleTime: 30_000,
     retry: 2,
     placeholderData: keepPreviousData,
+    throwOnError: true,
   });
 }
 
@@ -240,19 +244,30 @@ function BalancesCard({ address, horizonUrl }: { address: string; horizonUrl: st
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Spinner type="spin" size={24} />
-          </div>
-        ) : isError ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/20">
-            <p className="text-sm text-red-700 dark:text-red-400">
-              Failed to load balances from Horizon.
-            </p>
+          <div
+            role="status"
+            aria-label="Loading balances"
+            className="divide-y divide-zinc-100 dark:divide-zinc-800"
+          >
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-24" />
+              </div>
+            ))}
           </div>
         ) : !balances || balances.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-8">
-            No balances found for this account.
-          </p>
+          <EmptyState
+            icon={Wallet}
+            title="No balances found"
+            description="This account has no XLM or token balances on the Stellar network."
+          />
         ) : (
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {balances.map((b, i) => (
@@ -299,11 +314,7 @@ function TransactionHistoryCard({
 }) {
   const [page, setPage] = useState(1);
   const [pageCursors, setPageCursors] = useState<Record<number, string | null>>({ 1: null });
-  const { data, isLoading, isError } = useHorizonPayments(
-    address,
-    horizonUrl,
-    pageCursors[page] ?? null,
-  );
+  const { data, isLoading } = useHorizonPayments(address, horizonUrl, pageCursors[page] ?? null);
   const payments = data?.records ?? [];
   const totalPages = useMemo(() => {
     const knownPages = Object.keys(pageCursors).length;
@@ -371,7 +382,8 @@ function TransactionHistoryCard({
           <button
             type="button"
             onClick={exportCsv}
-            disabled={payments.length === 0 || isLoading || isError}
+            disabled={payments.length === 0 || isLoading}
+            title={payments.length === 0 ? "No transactions to export" : undefined}
             className="inline-flex items-center justify-center rounded-full border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
           >
             Export CSV
@@ -381,16 +393,12 @@ function TransactionHistoryCard({
       <CardContent>
         {isLoading ? (
           <TransactionsSkeleton />
-        ) : isError ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/20">
-            <p className="text-sm text-red-700 dark:text-red-400">
-              Failed to load transaction history from Horizon.
-            </p>
-          </div>
         ) : !payments || payments.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-8">
-            No transactions found.
-          </p>
+          <EmptyState
+            icon={ArrowUpRight}
+            title="No transactions yet"
+            description="Stellar payments will appear here once you send or receive funds."
+          />
         ) : (
           <div className="space-y-4">
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -507,7 +515,7 @@ export default function WalletPage() {
       </header>
 
       {/* Address card */}
-      <ErrorBoundary scope="wallet address" variant="section">
+      <QueryErrorBoundary scope="wallet address" variant="section">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -547,13 +555,13 @@ export default function WalletPage() {
             </div>
           </CardContent>
         </Card>
-      </ErrorBoundary>
+      </QueryErrorBoundary>
 
       {/* Balances + quick actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ErrorBoundary scope="token balances" variant="section">
+        <QueryErrorBoundary scope="token balances" variant="section">
           <BalancesCard address={address} horizonUrl={horizonUrl} />
-        </ErrorBoundary>
+        </QueryErrorBoundary>
 
         <Card>
           <CardHeader>
@@ -612,13 +620,13 @@ export default function WalletPage() {
       </div>
 
       {/* Transaction history from Horizon */}
-      <ErrorBoundary scope="transaction history" variant="section">
+      <QueryErrorBoundary scope="transaction history" variant="section">
         <TransactionHistoryCard
           address={address}
           horizonUrl={horizonUrl}
           explorerBase={explorerBase}
         />
-      </ErrorBoundary>
+      </QueryErrorBoundary>
     </main>
   );
 }
