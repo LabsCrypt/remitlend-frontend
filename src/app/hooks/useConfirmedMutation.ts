@@ -1,90 +1,38 @@
-"use client";
+'use client';
 
-import { useState, useCallback } from "react";
-import type { TransactionSummaryItem } from "../components/ui/ConfirmTransactionDialog";
+import { useQueryClient } from '@tanstack/react-query';
+import { useContractMutation } from './useContractMutation';
+import { useConfirmation } from './useConfirmation'; // Existing hook
 
-interface ConfirmedMutationOptions<TVariables> {
-  /** Build the summary rows from the mutation variables. */
-  buildSummary?: (variables: TVariables) => TransactionSummaryItem[];
-  /** Dialog title. */
-  title?: string;
-  /** Dialog description / warning text. */
-  description?: string;
-  /** Label for the confirm button. */
-  confirmLabel?: string;
+interface ConfirmedMutationOptions<TData, TVariables> {
+  operation: string;
+  buildTx: (variables: TVariables) => Promise<string>;
+  signTx: (xdr: string) => Promise<string>;
+  submitTx: (signedXdr: string) => Promise<{ hash: string }>;
+  queryKeys: string[]; // Queries to invalidate on success
+  onSuccess?: (data: TData, variables: TVariables) => void;
 }
 
-/**
- * Wraps any async mutation with a confirmation dialog flow.
- *
- * Usage:
- * ```tsx
- * const { dialogProps, trigger, isLoading } = useConfirmedMutation(
- *   (vars) => approveLoanMutation.mutateAsync(vars),
- *   {
- *     title: "Approve Loan",
- *     buildSummary: (vars) => [
- *       { label: "Loan ID", value: String(vars.loanId) },
- *       { label: "Amount",  value: `${vars.amount} USDC` },
- *     ],
- *   },
- * );
- *
- * // Render the dialog using dialogProps, trigger on button click:
- * <button onClick={() => trigger(variables)}>Approve</button>
- * <ConfirmTransactionDialog {...dialogProps} />
- * ```
- */
-export function useConfirmedMutation<TVariables>(
-  action: (variables: TVariables) => Promise<unknown>,
-  options: ConfirmedMutationOptions<TVariables> = {},
+export function useConfirmedMutation<TData = unknown, TVariables = unknown>(
+  options: ConfirmedMutationOptions<TData, TVariables>
 ) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [pendingVariables, setPendingVariables] = useState<TVariables | null>(null);
-  const [summary, setSummary] = useState<TransactionSummaryItem[]>([]);
+  const queryClient = useQueryClient();
+  const { confirm } = useConfirmation(); // Existing confirmation hook
 
-  const trigger = useCallback(
-    (variables: TVariables) => {
-      setPendingVariables(variables);
-      setSummary(options.buildSummary ? options.buildSummary(variables) : []);
-      setIsOpen(true);
+  const mutation = useContractMutation({
+    ...options,
+    confirmTx: async (hash: string) => {
+      // Use existing confirmation hook with unified timeout
+      return confirm(hash, { timeout: 30000, pollingInterval: 2000 });
     },
-    [options],
-  );
-
-  const handleConfirm = useCallback(async () => {
-    if (pendingVariables === null) return;
-    setIsLoading(true);
-    try {
-      await action(pendingVariables);
-    } finally {
-      setIsLoading(false);
-      setIsOpen(false);
-      setPendingVariables(null);
-    }
-  }, [action, pendingVariables]);
-
-  const handleClose = useCallback(() => {
-    if (isLoading) return; // block dismiss while tx is in-flight
-    setIsOpen(false);
-    setPendingVariables(null);
-  }, [isLoading]);
-
-  return {
-    /** Spread onto <ConfirmTransactionDialog> */
-    dialogProps: {
-      isOpen,
-      onClose: handleClose,
-      onConfirm: handleConfirm,
-      title: options.title,
-      description: options.description,
-      confirmLabel: options.confirmLabel,
-      summary,
-      isLoading,
+    onSuccess: (data, variables) => {
+      // Invalidate relevant queries
+      options.queryKeys.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      });
+      options.onSuccess?.(data, variables);
     },
-    /** Call with mutation variables to open the dialog */
-    trigger,
-    isLoading,
-  };
+  });
+
+  return mutation;
 }
