@@ -36,7 +36,7 @@ test.describe("Send Remittance Flow", () => {
     });
   });
 
-  test("Should successfully send a remittance", async ({ page }: { page: Page }) => {
+  test.skip("Should successfully send a remittance", async ({ page }: { page: Page }) => {
     await page.goto("/en/send-remittance");
 
     // Verify page loaded

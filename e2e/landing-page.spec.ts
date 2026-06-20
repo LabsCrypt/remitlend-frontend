@@ -16,7 +16,7 @@ test.describe("Landing Page", () => {
     await page.goto("/en");
 
     await expect(page.locator("text=Wallet Not Connected")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Connect Wallet/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Connect Wallet/i }).first()).toBeVisible();
   });
 
   test("should show localized help text for new visitors", async ({ page }) => {

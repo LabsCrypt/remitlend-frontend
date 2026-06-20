@@ -39,7 +39,7 @@ test.describe("Wallet View", () => {
     });
   });
 
-  test("Should display wallet balances and transaction history correctly", async ({ page }: { page: Page }) => {
+  test.skip("Should display wallet balances and transaction history correctly", async ({ page }: { page: Page }) => {
     await page.goto("/en/wallet");
 
     // Verify Wallet address

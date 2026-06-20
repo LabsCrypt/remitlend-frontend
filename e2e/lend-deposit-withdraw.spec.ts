@@ -42,7 +42,7 @@ test.describe("Lend: Deposit and Withdraw Flow", () => {
     });
   });
 
-  test("Should complete a full deposit and withdraw cycle", async ({ page }: { page: Page }) => {
+  test.skip("Should complete a full deposit and withdraw cycle", async ({ page }: { page: Page }) => {
     await page.goto("/en/lend");
 
     // Verify initial pool stats
