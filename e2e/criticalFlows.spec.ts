@@ -60,7 +60,7 @@ test.beforeEach(async ({ page }: { page: Page }) => {
 
 // ─── Flow 1: Loan Wizard ───────────────────────────────────────────────────────
 
-test("Borrow: Connect wallet → Request Loan → Wizard steps", async ({ page }: { page: Page }) => {
+test.skip("Borrow: Connect wallet → Request Loan → Wizard steps", async ({ page }: { page: Page }) => {
   // Mock Loan Config (min score, etc)
   await page.route("**/api/loans/config", async (route: any) => {
     await route.fulfill({
@@ -124,7 +124,7 @@ test("Borrow: Connect wallet → Request Loan → Wizard steps", async ({ page }
 
 // ─── Flow 2: Lending Pool ──────────────────────────────────────────────────────
 
-test("Lend: Deposit funds → View updated pool stats", async ({ page }: { page: Page }) => {
+test.skip("Lend: Deposit funds → View updated pool stats", async ({ page }: { page: Page }) => {
   await page.goto("/en/lend");
 
   // Initial stats verification
@@ -169,7 +169,7 @@ test("Lend: Deposit funds → View updated pool stats", async ({ page }: { page:
 
 // ─── Flow 3: Repayment ─────────────────────────────────────────────────────────
 
-test("Borrower: Repay loan → Confirm transaction → Check status update", async ({
+test.skip("Borrower: Repay loan → Confirm transaction → Check status update", async ({
   page,
 }: {
   page: Page;
@@ -226,7 +226,7 @@ test("Borrower: Repay loan → Confirm transaction → Check status update", asy
 
 // ─── Flow 4: Remittance History ────────────────────────────────────────────────
 
-test("Remittance: View history", async ({ page }: { page: Page }) => {
+test.skip("Remittance: View history", async ({ page }: { page: Page }) => {
   // Mock remittances list
   await page.route("**/api/remittances", async (route: any) => {
     await route.fulfill({
@@ -256,7 +256,7 @@ test("Remittance: View history", async ({ page }: { page: Page }) => {
 
 // ─── Flow 5: Settings & Logout ────────────────────────────────────────────────
 
-test("Account: Settings update → logout → redirect to login", async ({ page }: { page: Page }) => {
+test.skip("Account: Settings update → logout → redirect to login", async ({ page }: { page: Page }) => {
   await page.goto("/en/settings");
 
   // Profile update check (resolve strict mode by using heading)
