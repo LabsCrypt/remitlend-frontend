@@ -13,6 +13,7 @@ const withNextIntl = createNextIntlPlugin("./i18n.config.ts");
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  output: "standalone",
 };
 
 export default analyze(

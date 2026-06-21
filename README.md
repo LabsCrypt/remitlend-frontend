@@ -361,12 +361,18 @@ vercel
 
 ### Docker
 
+The production image uses a multi-stage build with Next.js standalone output,
+runs as a non-root user, and includes a health check.
+
 ```bash
-# Build image
+# Build the production image
 docker build -t remitlend-frontend .
 
-# Run container
+# Run the container
 docker run -p 3000:3000 remitlend-frontend
+
+# Verify the health check
+docker inspect --format='{{.State.Health.Status}}' <container-id>
 ```
 
 ### Environment Variables

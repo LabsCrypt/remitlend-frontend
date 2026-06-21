@@ -1,0 +1,28 @@
+node_modules
+.next
+.git
+.gitignore
+
+# E2E / test artifacts
+e2e-results/
+test-results/
+playwright-report/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode
+.idea
+*.swp
+.DS_Store
+Thumbs.db
+
+# Misc
+*.md
+LICENSE
+.husky
+.eslintcache
