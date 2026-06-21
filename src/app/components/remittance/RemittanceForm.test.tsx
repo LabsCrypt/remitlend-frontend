@@ -21,7 +21,11 @@ jest.mock("../../hooks/useTransactionPreview", () => ({
     isOpen: false,
     show: jest.fn(),
     hide: jest.fn(),
-    data: {},
+    data: {
+      network: "testnet",
+      operations: [],
+      balanceChanges: [],
+    },
     onConfirm: jest.fn(),
   })),
 }));
@@ -47,14 +51,12 @@ describe("RemittanceForm", () => {
     expect(screen.getByPlaceholderText("0.00")).toBeInTheDocument();
   });
 
-  it("should show error when recipient address is empty", async () => {
+  it("should show visible reason when recipient address is empty", () => {
     render(<RemittanceForm onSuccess={mockOnSuccess} />);
     const reviewButton = screen.getByText("Review & Send");
-    fireEvent.click(reviewButton);
 
-    await waitFor(() => {
-      expect(screen.getByText("Recipient address is required")).toBeInTheDocument();
-    });
+    expect(reviewButton).toBeDisabled();
+    expect(screen.getByText(/Enter a recipient address/)).toBeInTheDocument();
   });
 
   it("should show error for invalid Stellar address", async () => {
@@ -63,6 +65,7 @@ describe("RemittanceForm", () => {
 
     const addressInput = screen.getByPlaceholderText("G... (Stellar public key)");
     await user.type(addressInput, "INVALID123");
+    await user.type(screen.getByPlaceholderText("0.00"), "10");
 
     const reviewButton = screen.getByText("Review & Send");
     fireEvent.click(reviewButton);
@@ -72,48 +75,52 @@ describe("RemittanceForm", () => {
     });
   });
 
-  it("should show error when amount is empty", async () => {
+  it("should show visible reason when amount is empty", async () => {
     const user = userEvent.setup();
     render(<RemittanceForm onSuccess={mockOnSuccess} />);
 
     const addressInput = screen.getByPlaceholderText("G... (Stellar public key)");
-    await user.type(addressInput, "GBUQWP3BOUZX34ULNQG23RQ6F4BVWCIBTLFL2F7HVRQG5LDHNWY2QTW");
+    await user.type(addressInput, "GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37");
 
     const reviewButton = screen.getByText("Review & Send");
-    fireEvent.click(reviewButton);
 
-    await waitFor(() => {
-      expect(screen.getByText("Amount is required")).toBeInTheDocument();
-    });
+    expect(reviewButton).toBeDisabled();
+    expect(screen.getAllByText("Amount is required.").length).toBeGreaterThan(0);
   });
 
-  it("should show error for negative amount", async () => {
+  it("should show error for zero amount", async () => {
     const user = userEvent.setup();
     render(<RemittanceForm onSuccess={mockOnSuccess} />);
 
     const addressInput = screen.getByPlaceholderText("G... (Stellar public key)");
-    await user.type(addressInput, "GBUQWP3BOUZX34ULNQG23RQ6F4BVWCIBTLFL2F7HVRQG5LDHNWY2QTW");
+    await user.type(addressInput, "GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37");
 
     const amountInput = screen.getByPlaceholderText("0.00");
-    await user.type(amountInput, "-100");
+    await user.type(amountInput, "0");
 
     const reviewButton = screen.getByText("Review & Send");
-    fireEvent.click(reviewButton);
 
-    await waitFor(() => {
-      expect(screen.getByText("Amount must be greater than 0")).toBeInTheDocument();
-    });
+    expect(reviewButton).toBeDisabled();
+    expect(screen.getAllByText("Amount must be greater than 0.").length).toBeGreaterThan(0);
   });
 
   it("should show warning for memo longer than 28 characters", async () => {
     const user = userEvent.setup();
     render(<RemittanceForm onSuccess={mockOnSuccess} />);
 
+    await user.type(
+      screen.getByPlaceholderText("G... (Stellar public key)"),
+      "GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37",
+    );
+    await user.type(screen.getByPlaceholderText("0.00"), "10");
+
     const memoInput = screen.getByPlaceholderText(
       "Add a note for the recipient (max 28 characters)",
     );
+    // The textarea enforces maxLength=28, which userEvent.type respects, so set the
+    // value directly to exercise the validateForm backstop for over-length memos.
     const longMemo = "This is a very long memo that exceeds the limit";
-    await user.type(memoInput, longMemo);
+    fireEvent.change(memoInput, { target: { value: longMemo } });
 
     const reviewButton = screen.getByText("Review & Send");
     fireEvent.click(reviewButton);
@@ -162,7 +169,7 @@ describe("RemittanceForm", () => {
       "G... (Stellar public key)",
     ) as HTMLInputElement;
     const amountInput = screen.getByPlaceholderText("0.00") as HTMLInputElement;
-    const reviewButton = screen.getByText("Review & Send") as HTMLButtonElement;
+    const reviewButton = screen.getByRole("button", { name: /processing/i }) as HTMLButtonElement;
 
     expect(addressInput.disabled).toBe(true);
     expect(amountInput.disabled).toBe(true);
