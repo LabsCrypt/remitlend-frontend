@@ -1,19 +1,10 @@
-export type TransactionErrorCategory =
-  | "wallet_rejected"
-  | "network_timeout"
-  | "insufficient_balance"
-  | "score_too_low"
-  | "onchain_failure"
-  | "simulation_failed"
-  | "unknown";
+import { TransactionError, TransactionErrorCode } from '@/app/types/transaction';
 
-export interface TransactionErrorDetails {
-  category: TransactionErrorCategory;
-  title: string;
+interface ErrorMapping {
+  code: TransactionErrorCode;
   message: string;
-  guidance: string;
+  actionable: string;
   retryable: boolean;
-  cancelledByUser: boolean;
 }
 
 export interface PollTransactionOptions {
@@ -52,13 +43,15 @@ export function mapTransactionError(error: unknown): TransactionErrorDetails {
     normalized.includes("rejected") ||
     normalized.includes("denied") ||
     normalized.includes("cancelled") ||
-    normalized.includes("canceled")
+    normalized.includes("canceled") ||
+    normalized.includes("declined")
   ) {
     return {
       category: "wallet_rejected",
       title: "Transaction cancelled",
       message: "You cancelled the signing request in your wallet.",
-      guidance: "No funds moved. You can review details and submit again when ready.",
+      guidance:
+        "No funds moved. You can review details and submit again when ready.",
       retryable: true,
       cancelledByUser: true,
     };
@@ -73,7 +66,8 @@ export function mapTransactionError(error: unknown): TransactionErrorDetails {
       category: "network_timeout",
       title: "Network issue",
       message: "The network request timed out or could not be completed.",
-      guidance: "Check connectivity and retry. If it keeps failing, try again in a few minutes.",
+      guidance:
+        "Check connectivity and retry. If it keeps failing, try again in a few minutes.",
       retryable: true,
       cancelledByUser: false,
     };
@@ -102,7 +96,8 @@ export function mapTransactionError(error: unknown): TransactionErrorDetails {
       category: "score_too_low",
       title: "Loan request not eligible",
       message: "Your credit score does not meet the minimum requirement.",
-      guidance: "Repay active loans on time and retry after your score improves.",
+      guidance:
+        "Repay active loans on time and retry after your score improves.",
       retryable: false,
       cancelledByUser: false,
     };
@@ -128,7 +123,8 @@ export function mapTransactionError(error: unknown): TransactionErrorDetails {
       category: "onchain_failure",
       title: "Transaction failed on-chain",
       message: "The transaction was submitted but did not succeed on-chain.",
-      guidance: "Check the transaction hash details and adjust inputs before retrying.",
+      guidance:
+        "Check the transaction hash details and adjust inputs before retrying.",
       retryable: false,
       cancelledByUser: false,
     };
@@ -138,64 +134,156 @@ export function mapTransactionError(error: unknown): TransactionErrorDetails {
     category: "unknown",
     title: "Transaction failed",
     message: rawMessage,
-    guidance: "Try again, or adjust the amount and wallet state before retrying.",
+    guidance:
+      "Try again, or adjust the amount and wallet state before retrying.",
+const ERROR_MAP: Record<string, ErrorMapping> = {
+  // Wallet/user errors
+  'User declined': {
+    code: 'USER_REJECTED',
+    message: 'Transaction was rejected by user',
+    actionable: 'Please approve the transaction in your wallet to continue.',
     retryable: true,
-    cancelledByUser: false,
-  };
-}
+  },
+  'User rejected': {
+    code: 'USER_REJECTED',
+    message: 'Transaction was rejected by user',
+    actionable: 'Please approve the transaction in your wallet to continue.',
+    retryable: true,
+  },
+  'cancelled': {
+    code: 'USER_REJECTED',
+    message: 'Transaction was cancelled',
+    actionable: 'You cancelled the signing process. Click retry to try again.',
+    retryable: true,
+  },
 
-async function fetchTransactionStatus(
-  txHash: string,
-  horizonUrl: string,
-): Promise<"pending" | "success" | "failed"> {
-  const response = await fetch(`${horizonUrl}/transactions/${txHash}`);
+  // Fee errors
+  'insufficient fee': {
+    code: 'INSUFFICIENT_FEE',
+    message: 'Insufficient fee to submit transaction',
+    actionable: 'Your wallet balance is too low to cover the network fee. Please add more XLM and retry.',
+    retryable: true,
+  },
+  'tx_insufficient_fee': {
+    code: 'INSUFFICIENT_FEE',
+    message: 'Insufficient fee to submit transaction',
+    actionable: 'Your wallet balance is too low to cover the network fee. Please add more XLM and retry.',
+    retryable: true,
+  },
 
-  if (response.status === 404) {
-    return "pending";
-  }
+  // Timeout
+  'timeout': {
+    code: 'TIMEOUT',
+    message: 'Transaction confirmation timed out',
+    actionable: 'The network is experiencing delays. Your transaction may still complete. Check your history before retrying.',
+    retryable: true,
+  },
+  'tx_too_late': {
+    code: 'TIMEOUT',
+    message: 'Transaction expired before confirmation',
+    actionable: 'The transaction expired. Please retry with an updated sequence number.',
+    retryable: true,
+  },
 
-  if (!response.ok) {
-    throw new Error(`Unable to fetch transaction status (${response.status})`);
-  }
+  // Sequence errors
+  'bad_seq': {
+    code: 'SEQUENCE_MISMATCH',
+    message: 'Transaction sequence number mismatch',
+    actionable: 'Your wallet sequence number is out of sync. Please refresh and retry.',
+    retryable: true,
+  },
+  'sequence': {
+    code: 'SEQUENCE_MISMATCH',
+    message: 'Transaction sequence number mismatch',
+    actionable: 'Your wallet sequence number is out of sync. Please refresh and retry.',
+    retryable: true,
+  },
 
-  const payload = (await response.json()) as { successful?: boolean };
-  return payload.successful ? "success" : "failed";
-}
+  // Contract errors
+  'contract_error': {
+    code: 'CONTRACT_ERROR',
+    message: 'Smart contract execution failed',
+    actionable: 'The transaction failed during execution. Please verify your inputs and try again.',
+    retryable: false,
+  },
+  'invoke_host_function': {
+    code: 'CONTRACT_ERROR',
+    message: 'Smart contract execution failed',
+    actionable: 'The transaction failed during execution. Please verify your inputs and try again.',
+    retryable: false,
+  },
 
 export async function pollTransactionStatus(
   txHash: string,
   {
     horizonUrl = process.env.NEXT_PUBLIC_HORIZON_URL ?? DEFAULT_HORIZON_URL,
     intervalMs = 2500,
-    timeoutMs = 30_000,
+    timeoutMs = 30000,
     signal,
   }: PollTransactionOptions = {},
 ): Promise<PollTransactionResult> {
   const startedAt = Date.now();
+  // Network
+  'network_error': {
+    code: 'NETWORK_ERROR',
+    message: 'Network connection error',
+    actionable: 'Unable to connect to the Stellar network. Please check your connection and retry.',
+    retryable: true,
+  },
+  'connection': {
+    code: 'NETWORK_ERROR',
+    message: 'Network connection error',
+    actionable: 'Unable to connect to the Stellar network. Please check your connection and retry.',
+    retryable: true,
+  },
+};
 
-  while (Date.now() - startedAt < timeoutMs) {
-    if (signal?.aborted) {
+export function mapTransactionError(error: unknown): TransactionError {
+  const errorMessage = extractErrorMessage(error).toLowerCase();
+  
+  // Find matching error pattern
+  for (const [pattern, mapping] of Object.entries(ERROR_MAP)) {
+    if (errorMessage.includes(pattern.toLowerCase())) {
       return {
-        status: "cancelled",
-        message: "Status tracking cancelled by user.",
+        ...mapping,
+        originalError: error,
       };
     }
-
-    const status = await fetchTransactionStatus(txHash, horizonUrl);
-
-    if (status === "success") {
-      return { status: "success", message: "Transaction confirmed on-chain." };
-    }
-
-    if (status === "failed") {
-      return { status: "failed", message: "Transaction failed on-chain." };
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 
+  // Fallback for unknown errors
   return {
-    status: "timeout",
-    message: "Transaction is still pending. You can retry status tracking.",
+    code: 'UNKNOWN',
+    message: extractErrorMessage(error) || 'An unexpected error occurred',
+    actionable: 'Something went wrong. Please try again or contact support if the issue persists.',
+    retryable: true,
+    originalError: error,
+  };
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as Record<string, unknown>).message);
+  }
+  return 'Unknown error';
+}
+
+export function isRetryableError(error: TransactionError): boolean {
+  return error.retryable;
+}
+
+export function getErrorDisplay(error: TransactionError): {
+  title: string;
+  description: string;
+  action: string;
+  canRetry: boolean;
+} {
+  return {
+    title: error.code.replace(/_/g, ' '),
+    description: error.message,
+    action: error.actionable,
+    canRetry: error.retryable,
   };
 }

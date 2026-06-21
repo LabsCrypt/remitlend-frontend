@@ -1,466 +1,114 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import {
-  Activity,
-  ArrowDownLeft,
-  ArrowUpRight,
-  CircleDollarSign,
-  HandCoins,
-  Percent,
-  PiggyBank,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
-import { useLocale } from "next-intl";
-import { QueryErrorBoundary } from "../../components/global_ui/ErrorBoundary";
-import { QueryError } from "../../components/ui/QueryError";
-import { Skeleton } from "../../components/ui/Skeleton";
-import { YieldEarningsChart } from "../../components/charts/YieldEarningsChart";
-import {
-  useDepositorPortfolio,
-  useInvalidatePoolStats,
-  useLoans,
-  usePoolStats,
-  useYieldHistory,
-} from "../../hooks/useApi";
-import { LoanStatusBadge } from "../../components/ui/LoanStatusBadge";
-import { DepositWithdrawSkeleton } from "../../components/skeletons/DepositWithdrawSkeleton";
-import { OperationProgress } from "../../components/ui/OperationProgress";
-import { useDepositOperation, useWithdrawalOperation } from "../../hooks/useRepaymentOperation";
-import { selectWalletAddress, useWalletStore } from "../../stores/useWalletStore";
-import { useSSE } from "../../hooks/useSSE";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { Tooltip } from "../../components/ui/Tooltip";
-import {
-  AmountInput,
-  getAmountHelperText,
-  getAmountInputError,
-  getAmountInputErrorId,
-} from "../../components/global_ui/AmountInput";
-import { parseAmount } from "../../utils/amount";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-
-function formatPercent(value: number) {
-  return `${(value * 100).toFixed(2)}%`;
-}
+import { useState } from 'react';
+import { useConfirmedMutation } from '@/app/hooks/useConfirmedMutation';
+import { TransactionStatus } from '@/app/components/transaction/TransactionStatus';
+import { Button } from '@/app/components/global_ui/Button';
+import { Input } from '@/app/components/global_ui/Input';
 
 export function LendPageClient() {
-  const locale = useLocale();
-  const [depositAmount, setDepositAmount] = useState("100");
-  const [withdrawAmount, setWithdrawAmount] = useState("50");
-  const address = useWalletStore(selectWalletAddress);
+  const [amount, setAmount] = useState('');
+  const [action, setAction] = useState<'deposit' | 'withdraw'>('deposit');
 
-  const depositOp = useDepositOperation();
-  const withdrawalOp = useWithdrawalOperation();
-
-  const invalidatePoolStats = useInvalidatePoolStats();
-  const sseUrl = address ? `${API_URL}/pool/events` : null;
-  const sseStatus = useSSE<{ type: string }>({
-    url: sseUrl,
-    onMessage: (data) => {
-      if (data?.type === "pool_updated") {
-        invalidatePoolStats();
-      }
+  const depositMutation = useConfirmedMutation({
+    operation: 'lend_deposit',
+    buildTx: async (vars: { amount: string }) => {
+      const res = await fetch('/api/pool/build-deposit', {
+        method: 'POST',
+        body: JSON.stringify({ amount: vars.amount }),
+      });
+      return (await res.json()).xdr;
     },
-    onFallbackPoll: () => invalidatePoolStats(),
+    signTx: async (xdr) => {
+      const { signedXDR } = await window.freighterApi.signTransaction(xdr, {
+        network: 'TESTNET',
+      });
+      return signedXDR;
+    },
+    submitTx: async (signedXdr) => {
+      const res = await fetch('/api/transactions/submit', {
+        method: 'POST',
+        body: JSON.stringify({ xdr: signedXdr }),
+      });
+      return { hash: (await res.json()).hash };
+    },
+    queryKeys: ['pool-balance', 'user-deposits', 'pool-stats'],
   });
 
-  const handleDeposit = async () => {
-    const amount = parseAmount(depositAmount);
-    if (!address || depositAmountError) return;
-    await depositOp.executeDeposit({ amount, depositorAddress: address });
+  const withdrawMutation = useConfirmedMutation({
+    operation: 'lend_withdraw',
+    buildTx: async (vars: { amount: string }) => {
+      const res = await fetch('/api/pool/build-withdraw', {
+        method: 'POST',
+        body: JSON.stringify({ amount: vars.amount }),
+      });
+      return (await res.json()).xdr;
+    },
+    signTx: async (xdr) => {
+      const { signedXDR } = await window.freighterApi.signTransaction(xdr, {
+        network: 'TESTNET',
+      });
+      return signedXDR;
+    },
+    submitTx: async (signedXdr) => {
+      const res = await fetch('/api/transactions/submit', {
+        method: 'POST',
+        body: JSON.stringify({ xdr: signedXdr }),
+      });
+      return { hash: (await res.json()).hash };
+    },
+    queryKeys: ['pool-balance', 'user-deposits', 'pool-stats'],
+  });
+
+  const activeMutation = action === 'deposit' ? depositMutation : withdrawMutation;
+
+  const handleSubmit = () => {
+    if (!amount || parseFloat(amount) <= 0) return;
+    activeMutation.mutate({ amount });
   };
-
-  const handleWithdraw = async () => {
-    const amount = parseAmount(withdrawAmount);
-    if (!address || withdrawAmountError) return;
-    await withdrawalOp.executeWithdrawal({ amount, depositorAddress: address });
-  };
-
-  const { data: poolStats, isLoading: poolLoading } = usePoolStats({ enabled: !!address });
-  const { data: depositor, isLoading: depositorLoading } = useDepositorPortfolio(
-    address ?? undefined,
-    { enabled: !!address },
-  );
-  const { data: loans, isLoading: loansLoading } = useLoans({ enabled: !!address });
-  const { data: yieldHistory, isLoading: historyLoading } = useYieldHistory(address ?? undefined, {
-    enabled: !!address,
-  });
-
-  const depositAmountError = getAmountInputError(depositAmount, {
-    asset: "USDC",
-    required: true,
-  });
-  const withdrawAmountError = getAmountInputError(withdrawAmount, {
-    asset: "USDC",
-    required: true,
-    balance: depositor?.depositAmount,
-    balanceMessage: "Withdrawal amount must not exceed your deposited balance.",
-  });
-  const depositAmountErrorId = getAmountInputErrorId("deposit-amount");
-  const withdrawAmountErrorId = getAmountInputErrorId("withdraw-amount");
-
-  const chartData = useMemo(
-    () =>
-      (yieldHistory ?? []).map((entry) => ({
-        date: new Date(entry.date).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        }),
-        earnings: entry.earnings,
-        apy: entry.apy,
-        principal: entry.principal,
-      })),
-    [yieldHistory],
-  );
-
-  if (!address) {
-    return (
-      <section className="rounded-3xl border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-950">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Lender Dashboard</h1>
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-          Connect your wallet to view your lending pool portfolio.
-        </p>
-      </section>
-    );
-  }
-
-  const isLoading = poolLoading || depositorLoading || loansLoading || historyLoading;
 
   return (
-    <main className="space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
-            Lender Portal
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-zinc-900 dark:text-zinc-50">Lend</h1>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-            Track pool performance, manage deposits, and monitor yield growth.
-          </p>
-        </div>
-        {address && (
-          <div
-            className={`mt-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
-              sseStatus === "connected"
-                ? "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400"
-                : sseStatus === "connecting"
-                  ? "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-                  : sseStatus === "polling"
-                    ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                    : "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-            }`}
-            title={
-              sseStatus === "connected"
-                ? "Live pool updates connected"
-                : sseStatus === "connecting"
-                  ? "Connecting to live updates…"
-                  : sseStatus === "polling"
-                    ? "Live updates dropped — polling while reconnecting"
-                    : "Live updates disconnected — retrying"
-            }
-          >
-            {sseStatus === "connected" ? (
-              <Wifi className="h-3.5 w-3.5" />
-            ) : (
-              <WifiOff className="h-3.5 w-3.5" />
-            )}
-            {sseStatus === "connected"
-              ? "Live"
-              : sseStatus === "connecting"
-                ? "Connecting…"
-                : sseStatus === "polling"
-                  ? "Reconnecting…"
-                  : "Offline"}
-          </div>
-        )}
-      </header>
+    <div className="max-w-md mx-auto p-6 space-y-6">
+      <h1 className="text-2xl font-bold">Lending Pool</h1>
+      
+      <div className="flex gap-2">
+        <Button 
+          variant={action === 'deposit' ? 'primary' : 'secondary'}
+          onClick={() => setAction('deposit')}
+        >
+          Deposit
+        </Button>
+        <Button 
+          variant={action === 'withdraw' ? 'primary' : 'secondary'}
+          onClick={() => setAction('withdraw')}
+        >
+          Withdraw
+        </Button>
+      </div>
 
-      <QueryErrorBoundary scope="lender overview" variant="section">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              label: "Total Pool Size",
-              value: formatCurrency(poolStats?.totalDeposits ?? 0),
-              icon: CircleDollarSign,
-            },
-            {
-              label: "Utilization Rate",
-              value: formatPercent(poolStats?.utilizationRate ?? 0),
-              icon: Percent,
-              tooltip:
-                "Utilization Rate: How much of the pool is currently loaned out. Higher utilization can increase yield, but may reduce instant liquidity.",
-            },
-            {
-              label: "Current APY",
-              value: formatPercent(poolStats?.apy ?? 0),
-              icon: Activity,
-              tooltip:
-                "APY (Annual Percentage Yield): The estimated yearly return on deposits, including compounding. This may vary with pool utilization and repayments.",
-            },
-            {
-              label: "Active Loans",
-              value: String(poolStats?.activeLoansCount ?? 0),
-              icon: HandCoins,
-            },
-          ].map((item) => (
-            <article
-              key={item.label}
-              className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none"
-            >
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
-                  <item.icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    {item.label}
-                    {"tooltip" in item && item.tooltip ? (
-                      <Tooltip content={item.tooltip} label={`${item.label} info`} />
-                    ) : null}
-                  </p>
-                  {poolLoading ? (
-                    <Skeleton className="mt-1 h-7 w-24" />
-                  ) : (
-                    <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                      {item.value}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </article>
-          ))}
-        </section>
-      </QueryErrorBoundary>
+      <Input
+        type="number"
+        placeholder="Amount"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        disabled={activeMutation.isProcessing}
+      />
 
-      <QueryErrorBoundary scope="depositor summary" variant="section">
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">My Deposits</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Deposited Amount</p>
-                {depositorLoading ? (
-                  <Skeleton className="mt-2 h-7 w-24" />
-                ) : (
-                  <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {formatCurrency(depositor?.depositAmount ?? 0)}
-                  </p>
-                )}
-              </div>
-              <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Share of Pool</p>
-                {depositorLoading ? (
-                  <Skeleton className="mt-2 h-7 w-24" />
-                ) : (
-                  <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {formatPercent(depositor?.sharePercent ?? 0)}
-                  </p>
-                )}
-              </div>
-              <div className="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Estimated Earnings</p>
-                {depositorLoading ? (
-                  <Skeleton className="mt-2 h-7 w-24" />
-                ) : (
-                  <p className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                    {formatCurrency(depositor?.estimatedYield ?? 0)}
-                  </p>
-                )}
-              </div>
-            </div>
-          </article>
-          {depositorLoading ? (
-            <DepositWithdrawSkeleton />
-          ) : (
-            <article className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                Deposit / Withdraw
-              </h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <form
-                  className="space-y-3 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleDeposit();
-                  }}
-                >
-                  <AmountInput
-                    id="deposit-amount"
-                    label="Deposit Amount"
-                    value={depositAmount}
-                    onChange={setDepositAmount}
-                    asset="USDC"
-                    required
-                    helperText={getAmountHelperText(depositAmount, "USDC")}
-                    inputClassName={`w-full rounded-xl border bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-800 dark:bg-zinc-900 ${
-                      depositAmountError ? "border-red-500" : "border-zinc-200"
-                    }`}
-                  />
-                  <button
-                    id="deposit-submit"
-                    type="submit"
-                    disabled={depositOp.isLoading || !!depositAmountError}
-                    aria-describedby={
-                      depositAmountError
-                        ? depositAmountErrorId
-                        : depositOp.isLoading
-                          ? "deposit-submit-hint"
-                          : undefined
-                    }
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <ArrowUpRight className="h-4 w-4" />
-                    {depositOp.isLoading ? "Depositing..." : "Deposit"}
-                  </button>
-                  {depositOp.isLoading && (
-                    <p
-                      id="deposit-submit-hint"
-                      className="text-xs text-indigo-600 dark:text-indigo-400"
-                    >
-                      Deposit in progress - please wait.
-                    </p>
-                  )}
-                  <OperationProgress transaction={depositOp.transaction} type="deposit" />
-                </form>
+      <TransactionStatus
+        lifecycle={activeMutation.lifecycle}
+        onRetry={activeMutation.retry}
+        onReset={activeMutation.reset}
+      />
 
-                <form
-                  className="space-y-3 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleWithdraw();
-                  }}
-                >
-                  <AmountInput
-                    id="withdraw-amount"
-                    label="Withdraw Amount"
-                    value={withdrawAmount}
-                    onChange={setWithdrawAmount}
-                    asset="USDC"
-                    required
-                    balance={depositor?.depositAmount}
-                    balanceMessage="Withdrawal amount must not exceed your deposited balance."
-                    helperText={getAmountHelperText(withdrawAmount, "USDC")}
-                    inputClassName={`w-full rounded-xl border bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-zinc-800 dark:bg-zinc-900 ${
-                      withdrawAmountError ? "border-red-500" : "border-zinc-200"
-                    }`}
-                  />
-                  <button
-                    id="withdraw-submit"
-                    type="submit"
-                    disabled={withdrawalOp.isLoading || !!withdrawAmountError}
-                    aria-describedby={
-                      withdrawAmountError
-                        ? withdrawAmountErrorId
-                        : withdrawalOp.isLoading
-                          ? "withdraw-submit-hint"
-                          : undefined
-                    }
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-                  >
-                    <ArrowDownLeft className="h-4 w-4" />
-                    {withdrawalOp.isLoading ? "Withdrawing..." : "Withdraw"}
-                  </button>
-                  {withdrawalOp.isLoading && (
-                    <p
-                      id="withdraw-submit-hint"
-                      className="text-xs text-zinc-500 dark:text-zinc-400"
-                    >
-                      Withdrawal in progress - please wait.
-                    </p>
-                  )}
-                  <OperationProgress transaction={withdrawalOp.transaction} type="withdrawal" />
-                </form>
-              </div>
-            </article>
-          )}
-        </section>
-      </QueryErrorBoundary>
-
-      <QueryErrorBoundary scope="loan portfolio" variant="section">
-        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Loan Portfolio</h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Read-only view of loans currently funded through the pool.
-          </p>
-
-          <div className="mt-4 space-y-3">
-            {isLoading && (
-              <>
-                <Skeleton className="h-[76px] w-full rounded-2xl" />
-                <Skeleton className="h-[76px] w-full rounded-2xl" />
-                <Skeleton className="h-[76px] w-full rounded-2xl" />
-              </>
-            )}
-            {!isLoading &&
-              (loans ?? [])
-                .filter((loan) => loan.status === "active")
-                .slice(0, 8)
-                .map((loan) => (
-                  <article
-                    key={loan.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800 md:flex-row md:items-center md:justify-between"
-                  >
-                    <div>
-                      <p className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-                        Loan #{loan.id}
-                      </p>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Borrower: {loan.borrowerId}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
-                      <span>{formatCurrency(loan.amount)}</span>
-                      <span>{loan.interestRate.toFixed(2)}% APR</span>
-                      <span>{loan.termDays} days</span>
-                      <LoanStatusBadge status={loan.status} />
-                    </div>
-                    <Link
-                      href={`/${locale}/loans/${loan.id}`}
-                      className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                    >
-                      View
-                    </Link>
-                  </article>
-                ))}
-
-            {!isLoading &&
-              (loans ?? []).filter((loan) => loan.status === "active").length === 0 && (
-                <EmptyState
-                  icon={PiggyBank}
-                  title="No active pool-funded loans yet"
-                  description="Active loans funded by the pool will appear here once borrowers draw against available liquidity."
-                />
-              )}
-          </div>
-        </section>
-      </QueryErrorBoundary>
-
-      <QueryErrorBoundary scope="yield history" variant="section">
-        <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-          {isLoading ? (
-            <div className="space-y-4 p-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-[300px] w-full rounded-xl" />
-            </div>
-          ) : chartData.length === 0 ? (
-            <EmptyState
-              icon={Activity}
-              title="No yield history yet"
-              description="Yield performance will appear here after the pool records deposits, loans, and earnings."
-            />
-          ) : (
-            <YieldEarningsChart data={chartData} />
-          )}
-        </section>
-      </QueryErrorBoundary>
-    </main>
+      {activeMutation.canSubmit && (
+        <Button 
+          onClick={handleSubmit}
+          disabled={!amount || activeMutation.isProcessing}
+          className="w-full"
+        >
+          {action === 'deposit' ? 'Deposit' : 'Withdraw'}
+        </Button>
+      )}
+    </div>
   );
 }

@@ -1,152 +1,87 @@
-/**
- * hooks/useContractMutation.ts
- *
- * Wrapper hook that combines TanStack Query mutations with automatic toast notifications.
- * Provides a consistent pattern for handling blockchain transactions with user feedback.
- *
- * Usage Example:
- * ```tsx
- * const createLoan = useContractMutation(useCreateLoan(), {
- *   pendingMessage: "Creating loan...",
- *   successMessage: "Loan created successfully!",
- *   errorMessage: "Failed to create loan",
- * });
- *
- * // In your component
- * createLoan.mutate({ amount: 1000, ... });
- * ```
- */
+'use client';
 
-import { type UseMutationResult } from "@tanstack/react-query";
-import { useContractToast } from "./useContractToast";
-import { useCallback, useRef } from "react";
-import { useGamificationStore } from "../stores/useGamificationStore";
+import { useCallback } from 'react';
+import { useTransactionLifecycle } from './useTransactionLifecycle';
+import { TransactionContext } from '@/app/types/transaction';
 
-interface ContractMutationOptions {
-  /** Message shown during pending state */
-  pendingMessage?: string;
-  /** Message shown on success */
-  successMessage?: string;
-  /** Message shown on error */
-  errorMessage?: string;
-  /** Stellar network for explorer links */
-  network?: "testnet" | "public";
-  /** Disable automatic toast notifications */
-  disableToast?: boolean;
-  /** Gamification XP to award on success */
-  gamificationXP?: number;
-  /** Gamification reason for XP */
-  gamificationReason?: string;
-  /** Gamification achievement ID to unlock on success */
-  gamificationAchievement?: string;
+interface ContractMutationOptions<TData, TVariables> {
+  operation: string;
+  buildTx: (variables: TVariables) => Promise<string>; // Returns XDR
+  signTx: (xdr: string) => Promise<string>; // Returns signed XDR
+  submitTx: (signedXdr: string) => Promise<{ hash: string }>;
+  confirmTx: (hash: string) => Promise<boolean>;
+  onSuccess?: (data: TData, variables: TVariables) => void;
+  onError?: (error: Error, variables: TVariables) => void;
+  invalidateQueries?: string[];
 }
 
-/**
- * Wraps a TanStack Query mutation with automatic toast notifications.
- * Handles the full transaction lifecycle: pending → success/error.
- */
-export function useContractMutation<TData extends { txHash?: string }, TError, TVariables>(
-  mutation: UseMutationResult<TData, TError, TVariables>,
-  options: ContractMutationOptions = {},
+export function useContractMutation<TData = unknown, TVariables = unknown>(
+  options: ContractMutationOptions<TData, TVariables>
 ) {
-  const toast = useContractToast();
-  const gamificationStore = useGamificationStore();
-  const toastIdRef = useRef<string | number | null>(null);
+  const { lifecycle, transition, canSubmit, isProcessing } = useTransactionLifecycle();
 
-  const {
-    pendingMessage = "Processing transaction...",
-    successMessage = "Transaction successful!",
-    errorMessage = "Transaction failed",
-    network = "testnet",
-    disableToast = false,
-    gamificationXP,
-    gamificationReason,
-    gamificationAchievement,
-  } = options;
-
-  const triggerGamification = useCallback(() => {
-    if (gamificationXP) {
-      // Small delay to let the toast appear first
-      setTimeout(() => {
-        gamificationStore.addXP(gamificationXP, gamificationReason);
-        if (gamificationAchievement) {
-          gamificationStore.unlockAchievement(gamificationAchievement);
-        }
-      }, 500);
-    } else if (gamificationAchievement) {
-      setTimeout(() => {
-        gamificationStore.unlockAchievement(gamificationAchievement);
-      }, 500);
-    }
-  }, [gamificationXP, gamificationReason, gamificationAchievement, gamificationStore]);
-
-  const mutate = (
-    variables: TVariables,
-    mutationOptions?: Parameters<typeof mutation.mutate>[1],
-  ) => {
-    if (!disableToast) {
-      toastIdRef.current = toast.showPending(pendingMessage);
-    }
-
-    mutation.mutate(variables, {
-      ...mutationOptions,
-      onSuccess: (data, vars, onMutateResult, context) => {
-        if (!disableToast && toastIdRef.current !== null) {
-          toast.showSuccess(toastIdRef.current, {
-            successMessage,
-            txHash: data.txHash,
-            network,
-          });
-        }
-        triggerGamification();
-        mutationOptions?.onSuccess?.(data, vars, onMutateResult, context);
-      },
-      onError: (error, vars, onMutateResult, context) => {
-        if (!disableToast && toastIdRef.current !== null) {
-          toast.showError(toastIdRef.current, {
-            errorMessage: error instanceof Error ? error.message : errorMessage,
-          });
-        }
-        mutationOptions?.onError?.(error, vars, onMutateResult, context);
-      },
-    });
-  };
-
-  const mutateAsync = async (
-    variables: TVariables,
-    mutationOptions?: Parameters<typeof mutation.mutateAsync>[1],
-  ) => {
-    if (!disableToast) {
-      toastIdRef.current = toast.showPending(pendingMessage);
-    }
-
-    try {
-      const data = await mutation.mutateAsync(variables, mutationOptions);
-
-      if (!disableToast && toastIdRef.current !== null) {
-        toast.showSuccess(toastIdRef.current, {
-          successMessage,
-          txHash: data.txHash,
-          network,
-        });
+  const mutate = useCallback(
+    async (variables: TVariables) => {
+      if (!canSubmit) {
+        throw new Error('Transaction already in progress');
       }
 
-      triggerGamification();
+      const context: TransactionContext = {
+        operation: options.operation,
+        metadata: variables as Record<string, unknown>,
+      };
 
-      return data;
-    } catch (error) {
-      if (!disableToast && toastIdRef.current !== null) {
-        toast.showError(toastIdRef.current, {
-          errorMessage: error instanceof Error ? error.message : errorMessage,
-        });
+      try {
+        // 1. Build
+        transition({ type: 'START_BUILD', context });
+        const xdr = await options.buildTx(variables);
+        transition({ type: 'BUILD_SUCCESS' });
+
+        // 2. Sign
+        transition({ type: 'AWAIT_SIGNATURE' });
+        const signedXdr = await options.signTx(xdr);
+        transition({ type: 'SIGNATURE_SUCCESS' });
+
+        // 3. Submit
+        transition({ type: 'SUBMIT' });
+        const { hash } = await options.submitTx(signedXdr);
+        transition({ type: 'SUBMIT_SUCCESS', txHash: hash });
+
+        // 4. Confirm
+        transition({ type: 'CONFIRM' });
+        const confirmed = await options.confirmTx(hash);
+        
+        if (!confirmed) {
+          throw new Error('Transaction confirmation timeout');
+        }
+
+        transition({ type: 'CONFIRM_SUCCESS' });
+        options.onSuccess?.(hash as TData, variables);
+
+        return hash;
+      } catch (error) {
+        transition({ type: 'ERROR', error });
+        options.onError?.(error as Error, variables);
+        throw error;
       }
-      throw error;
-    }
-  };
+    },
+    [canSubmit, transition, options]
+  );
+
+  const retry = useCallback(() => {
+    transition({ type: 'RETRY' });
+  }, [transition]);
+
+  const reset = useCallback(() => {
+    transition({ type: 'RESET' });
+  }, [transition]);
 
   return {
-    ...mutation,
     mutate,
-    mutateAsync,
+    retry,
+    reset,
+    lifecycle,
+    isProcessing,
+    canSubmit,
   };
 }
