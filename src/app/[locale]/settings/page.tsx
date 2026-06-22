@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams, useRouter, usePathname } from "next/navigation";
 import {
   User,
   Wallet,
@@ -423,15 +424,25 @@ function SecuritySection() {
 // ─── Display section ──────────────────────────────────────────────────────────
 
 function DisplaySection() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useParams();
+  const currentLocale = (params?.locale as string) || "en";
+
   const LANGUAGES = [
     { code: "en", label: "English" },
     { code: "es", label: "Español" },
-    { code: "fr", label: "Français" },
-    { code: "pt", label: "Português" },
-    { code: "hi", label: "हिन्दी" },
+    { code: "tl", label: "Tagalog" },
   ];
 
-  const [language, setLanguage] = useState("en");
+  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLocale = e.target.value;
+    if (pathname.startsWith(`/${currentLocale}`)) {
+      router.push(pathname.replace(`/${currentLocale}`, `/${newLocale}`));
+    } else {
+      router.push(`/${newLocale}${pathname}`);
+    }
+  };
 
   const theme = useThemeStore((s) => s.theme);
   const hydrated = useThemeStore((s) => s.hydrated);
@@ -488,8 +499,8 @@ function DisplaySection() {
           </label>
           <select
             id="settings-language"
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
+            value={currentLocale}
+            onChange={handleLanguageChange}
             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50"
           >
             {LANGUAGES.map((l) => (
@@ -498,9 +509,6 @@ function DisplaySection() {
               </option>
             ))}
           </select>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5">
-            Full i18n support is coming soon. Only English is fully translated.
-          </p>
         </div>
       </CardContent>
     </Card>

@@ -5,10 +5,10 @@
     "getStarted": "Magsimula Na",
     "learnMore": "Matuto Nang Higit Pa",
     "stats": {
-      "netWorth": "Net Worth",
+      "netWorth": "Netong Halaga",
       "activeLoans": "Mga aktibong loan",
       "totalRemitted": "Kabuuang naipadala",
-      "yieldApy": "Yield (APY)"
+      "yieldApy": "Kita (APY)"
     },
     "activity": {
       "title": "Kamakailang aktibidad",
@@ -23,7 +23,7 @@
       "sendRemittanceDesc": "Maglipat ng pondo sa buong mundo"
     },
     "outreach": {
-      "title": "Community Outreach",
+      "title": "Programa sa Komunidad",
       "description": "Ang mga bagong borrower sa Ghana ay naghahanap ng mga micro-loan para sa mga kagamitang pang-agrikultura. Tulungang palaguin ang ecosystem!",
       "explore": "Galugarin ang mga pagkakataon"
     }
@@ -46,7 +46,7 @@
       "completed": "Nakumpleto",
       "repaid": "Binayaran",
       "failed": "Nabigo",
-      "liquidated": "Liquidated",
+      "liquidated": "Na-liquidate",
       "defaulted": "Di-nakamit"
     },
     "pagination": {
@@ -60,7 +60,7 @@
       "amount": "Halaga",
       "status": "Katayuan",
       "transactionHash": "Hash ng Transaksyon",
-      "stellarExplorerLink": "Stellar Explorer Link"
+      "stellarExplorerLink": "Link ng Stellar Explorer"
     }
   },
   "WalletPage": {
@@ -68,14 +68,14 @@
       "date": "Petsa",
       "type": "Uri",
       "amount": "Halaga",
-      "asset": "Asset",
+      "asset": "Ari-arian",
       "status": "Katayuan",
       "transactionHash": "Hash ng Transaksyon",
-      "stellarExplorerLink": "Stellar Explorer Link"
+      "stellarExplorerLink": "Link ng Stellar Explorer"
     }
   },
   "Navigation": {
-    "home": "Home",
+    "home": "Pangunahin",
     "loans": "Mga Loan",
     "repay": "Bayaran",
     "dashboard": "Dashboard",
@@ -98,7 +98,7 @@
       "all": "Lahat",
       "active": "Aktibo",
       "repaid": "Bayad Na",
-      "defaulted": "Defaulted"
+      "defaulted": "Hindi Nabayaran"
     },
     "empty": {
       "title": "Walang nahanap na loan",
@@ -110,7 +110,7 @@
       "next": "Susunod",
       "pageOf": "Pahina {current} of {total}"
     },
-    "loanNumber": "Loan #{id}",
+    "loanNumber": "Utang #{id}",
     "due": "Dapat bayaran sa {date}",
     "status": {
       "active": "Aktibo",
@@ -118,7 +118,7 @@
     }
   },
   "Kingdom": {
-    "title": "Kingdom Dashboard",
+    "title": "Dashboard ng Kaharian",
     "description": "Subaybayan ang iyong pag-unlad, i-unlock ang mga tagumpay, at umangat sa mga ranggo",
     "welcome": "Maligayang pagdating, {kingdomTitle}!",
     "level": "Ngayon ay nasa Level {level} ka",
@@ -130,7 +130,7 @@
   },
   "LoanCard": {
     "totalOwed": "Kabuuang Utang",
-    "principal": "Principal",
+    "principal": "Pangunahing Halaga",
     "accruedInterest": "Naipon na Interes",
     "interest": "Interes",
     "nextPayment": "Susunod na Pagbabayad",
@@ -140,7 +140,7 @@
     "onTrack": "Sa Track",
     "dueSoon": "Malapit nang Dapat Bayaran",
     "overdue": "Lintasan",
-    "defaulted": "Defaulted",
+    "defaulted": "Hindi Nabayaran",
     "repayNow": "Bayaran Ngayon",
     "payNowOverdue": "Bayaran Ngayon (Lintasan)",
     "contactSupport": "Kontakin ang Support",
