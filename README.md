@@ -55,10 +55,14 @@ npm run build        # Build the application for production
 npm start            # Run the compiled production build locally
 
 # Code Quality & Formatting
-npm run lint         # Check code style with Prettier
+npm run lint         # Lint source files with ESLint
+npm run lint:format  # Check code style with Prettier (without auto-fixing)
 npm run format       # Format codebase style automatically using Prettier
+npm run typecheck    # Run TypeScript compiler check without emitting files
 
 # Testing & Audits
+npm test             # Run unit tests with Jest
+npm run test:watch   # Run Jest in watch mode
 npm run test:e2e     # Run end-to-end integration tests using Playwright
 npm run audit:a11y   # Build application and perform an accessibility (a11y) audit via axe-playwright
 
