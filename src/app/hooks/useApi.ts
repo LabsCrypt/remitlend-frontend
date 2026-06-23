@@ -1226,3 +1226,39 @@ export async function submitLoanTransaction(signedTxXdr: string) {
     body: JSON.stringify({ signedTxXdr }),
   });
 }
+
+
+// ─── Api hook ──────────────────────────────────────────────────────
+export function useApi() {
+
+  const upload = async (
+    endpoint: string,
+    file: File,
+    options?: { headers?: Record<string, string> }
+  ) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        // Don't set Content-Type — browser sets it with boundary for FormData
+        Authorization: `Bearer ${getToken()}`, // your auth method
+        ...options?.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+      throw new Error(error.message || `Upload failed: ${response.status}`);
+    }
+
+    return response.json();
+  };
+
+  return {
+    // ... existing exports
+    upload,
+  };
+}
