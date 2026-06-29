@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Crown, TrendingUp } from "lucide-react";
 import { useGamificationStore, getNextLevelInfo } from "@/app/stores/useGamificationStore";
+import { useUIStore } from "@/app/stores/useUIStore";
 import { Card } from "../ui/Card";
 
 interface KingdomProgressWidgetProps {
@@ -14,7 +15,8 @@ export function KingdomProgressWidget({ className, compact = false }: KingdomPro
   const level = useGamificationStore((state) => state.level);
   const xp = useGamificationStore((state) => state.xp);
   const kingdomTitle = useGamificationStore((state) => state.kingdomTitle);
-  const animationsEnabled = useGamificationStore((state) => state.animationsEnabled);
+  const reducedMotion = useUIStore((state) => state.reducedMotion);
+  const animationsEnabled = !reducedMotion;
 
   const { nextLevel, xpToNext, progress } = getNextLevelInfo(xp);
   const isMaxLevel = nextLevel === level;

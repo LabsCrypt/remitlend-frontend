@@ -4,6 +4,7 @@
 // The null fallback is intentional: the animation has no meaningful skeleton.
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { useUIStore } from "@/app/stores/useUIStore";
 import { Sparkles } from "lucide-react";
 
 const MotionDiv = dynamic(() => import("framer-motion").then((mod) => mod.motion.div), {
@@ -27,6 +28,7 @@ export function XPGainAnimation({
   position = "top",
 }: XPGainAnimationProps) {
   const [isVisible, setIsVisible] = useState(show);
+  const reducedMotion = useUIStore((state) => state.reducedMotion);
 
   useEffect(() => {
     if (show) {
@@ -48,6 +50,10 @@ export function XPGainAnimation({
   return (
     <AnimatePresence>
       {isVisible && (
+        <motion.div
+          initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.5, y: 20 }}
+          animate={reducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+          exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8, y: -20 }}
         <MotionDiv
           initial={{ opacity: 0, scale: 0.5, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -56,6 +62,9 @@ export function XPGainAnimation({
           className={`fixed left-1/2 ${positionClasses[position]} z-50 -translate-x-1/2`}
         >
           <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 shadow-lg">
+            <motion.div
+              animate={reducedMotion ? {} : { rotate: [0, 360] }}
+              transition={reducedMotion ? {} : { duration: 1, repeat: Infinity, ease: "linear" }}
             <MotionDiv
               animate={{ rotate: [0, 360] }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}

@@ -1,7 +1,8 @@
 "use client";
 
-import { Volume2, VolumeX, Sparkles, SparklesIcon } from "lucide-react";
+import { Volume2, VolumeX, Sparkles, Accessibility } from "lucide-react";
 import { useGamificationStore } from "@/app/stores/useGamificationStore";
+import { useUIStore } from "@/app/stores/useUIStore";
 import { useSoundEffect } from "@/app/utils/soundManager";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/Card";
 import { useEffect } from "react";
@@ -11,42 +12,31 @@ interface GamificationSettingsProps {
 }
 
 export function GamificationSettings({ className }: GamificationSettingsProps) {
-  const soundEnabled = useGamificationStore((state) => state.soundEnabled);
-  const animationsEnabled = useGamificationStore((state) => state.animationsEnabled);
-  const soundVolume = useGamificationStore((state) => state.soundVolume);
-  const toggleSound = useGamificationStore((state) => state.toggleSound);
-  const toggleAnimations = useGamificationStore((state) => state.toggleAnimations);
-  const setSoundVolume = useGamificationStore((state) => state.setSoundVolume);
+  const soundEnabled = useUIStore((state) => state.soundEnabled);
+  const reducedMotion = useUIStore((state) => state.reducedMotion);
+  const setSoundEnabled = useUIStore((state) => state.setSoundEnabled);
+  const setReducedMotion = useUIStore((state) => state.setReducedMotion);
 
   const sound = useSoundEffect();
 
   // Sync sound manager with store
   useEffect(() => {
     sound.setEnabled(soundEnabled);
-    sound.setVolume(soundVolume);
-  }, [soundEnabled, soundVolume, sound]);
+  }, [soundEnabled, sound]);
 
   const handleToggleSound = () => {
-    toggleSound();
-    if (!soundEnabled) {
+    const nextState = !soundEnabled;
+    setSoundEnabled(nextState);
+    if (nextState) {
       // Play a test sound when enabling
       setTimeout(() => sound.play("success"), 100);
     }
   };
 
-  const handleToggleAnimations = () => {
-    toggleAnimations();
-    if (soundEnabled) {
+  const handleToggleReducedMotion = () => {
+    setReducedMotion(!reducedMotion);
+    if (soundEnabled && reducedMotion) {
       sound.play("click");
-    }
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(e.target.value);
-    setSoundVolume(newVolume);
-    // Play a test sound at the new volume
-    if (soundEnabled) {
-      sound.play("xpGain");
     }
   };
 
@@ -88,48 +78,30 @@ export function GamificationSettings({ className }: GamificationSettingsProps) {
           </button>
         </div>
 
-        {/* Volume slider */}
-        {soundEnabled && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-900 dark:text-zinc-100">
-              Volume: {Math.round(soundVolume * 100)}%
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={soundVolume}
-              onChange={handleVolumeChange}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-zinc-700 accent-blue-600"
-            />
-          </div>
-        )}
-
-        {/* Animations toggle */}
+        {/* Reduced Motion toggle */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Sparkles
+            <Accessibility
               className={`h-5 w-5 ${
-                animationsEnabled ? "text-purple-600 dark:text-purple-400" : "text-gray-400"
+                reducedMotion ? "text-purple-600 dark:text-purple-400" : "text-gray-400"
               }`}
             />
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-zinc-100">Animations</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-zinc-100">Reduced Motion</p>
               <p className="text-xs text-gray-600 dark:text-zinc-400">
-                Enable micro-animations and effects
+                Disable or tone down non-essential animations
               </p>
             </div>
           </div>
           <button
-            onClick={handleToggleAnimations}
+            onClick={handleToggleReducedMotion}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              animationsEnabled ? "bg-purple-600" : "bg-gray-300 dark:bg-zinc-700"
+              reducedMotion ? "bg-purple-600" : "bg-gray-300 dark:bg-zinc-700"
             }`}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                animationsEnabled ? "translate-x-6" : "translate-x-1"
+                reducedMotion ? "translate-x-6" : "translate-x-1"
               }`}
             />
           </button>

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { X, Crown, Sparkles, Gift } from "lucide-react";
 import { useGamificationStore } from "@/app/stores/useGamificationStore";
+import { useUIStore } from "@/app/stores/useUIStore";
 import { useSoundEffect } from "@/app/utils/soundManager";
 import { Button } from "../ui/Button";
 import { useModalFocusTrap } from "../../hooks/useModalFocusTrap";
@@ -27,8 +28,9 @@ export function LevelUpModal() {
   const showModal = useGamificationStore((state) => state.showLevelUpModal);
   const pendingLevelUp = useGamificationStore((state) => state.pendingLevelUp);
   const dismissLevelUp = useGamificationStore((state) => state.dismissLevelUp);
-  const soundEnabled = useGamificationStore((state) => state.soundEnabled);
-  const animationsEnabled = useGamificationStore((state) => state.animationsEnabled);
+  const soundEnabled = useUIStore((state) => state.soundEnabled);
+  const reducedMotion = useUIStore((state) => state.reducedMotion);
+  const animationsEnabled = !reducedMotion;
   const modalRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
