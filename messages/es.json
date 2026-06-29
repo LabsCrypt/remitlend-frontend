@@ -130,7 +130,7 @@
   },
   "LoanCard": {
     "totalOwed": "Total adeudado",
-    "principal": "Principal",
+    "principal": "Capital",
     "accruedInterest": "Interés acumulado",
     "interest": "Interés",
     "nextPayment": "Próximo pago",
