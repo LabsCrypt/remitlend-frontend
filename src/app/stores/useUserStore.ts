@@ -16,16 +16,19 @@
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { useGamificationStore } from "./useGamificationStore";
+import { create } from 'zustand';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface User {
   id: string;
+  name: string;
   email: string;
   walletAddress?: string;
   kycVerified: boolean;
   /** ISO 8601 timestamp of when the session was established */
   sessionStartedAt?: string;
+  avatarUrl: string | null;
 }
 
 interface UserState {
@@ -52,6 +55,9 @@ interface UserActions {
   updateUser: (partial: Partial<User>) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  // New avatar actions
+  setAvatar: (avatarUrl: string) => void;
+  removeAvatar: () => void;
 }
 
 export type UserStore = UserState & UserActions;
@@ -102,6 +108,16 @@ export const useUserStore = create<UserStore>()(
             "user/updateUser",
           );
         },
+
+        setAvatar: (avatarUrl) =>
+    set((state) => ({
+      user: state.user ? { ...state.user, avatarUrl } : null,
+    })),
+  
+  removeAvatar: () =>
+    set((state) => ({
+      user: state.user ? { ...state.user, avatarUrl: null } : null,
+    })),
 
         setLoading: (isLoading) => set({ isLoading }, false, "user/setLoading"),
 

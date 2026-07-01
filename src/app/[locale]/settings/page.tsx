@@ -27,6 +27,8 @@ import {
 } from "../../stores/useWalletStore";
 import { useUserStore, selectUser } from "../../stores/useUserStore";
 import { logoutUser } from "../../lib/session";
+import { useTranslations } from "next-intl";
+import { AvatarUpload } from "../../components/AvatarUpload";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,7 +124,9 @@ function Toggle({
 
 function ProfileSection() {
   const user = useUserStore(selectUser);
-  const [displayName, setDisplayName] = useState(user?.id ?? "");
+  const setAvatar = useUserStore((s) => s.setAvatar);
+  const removeAvatar = useUserStore((s) => s.removeAvatar);
+  const [displayName, setDisplayName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [saved, setSaved] = useState(false);
 
@@ -130,6 +134,28 @@ function ProfileSection() {
     // In real impl: call PATCH /api/user/profile
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleAvatarChange = (url: string) => {
+    setAvatar(url);
+  };
+
+  const handleAvatarRemove = async () => {
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/users/avatar`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("authToken") || ""}`,
+          },
+        }
+      );
+      if (!res.ok) throw new Error("Failed to remove avatar");
+      removeAvatar();
+    } catch (err) {
+      console.error("Failed to remove avatar:", err);
+    }
   };
 
   return (
@@ -140,18 +166,18 @@ function ProfileSection() {
           Manage your public display name and contact info.
         </p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Avatar */}
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center">
-            <User className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Profile Picture</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Avatars are not supported yet — coming soon.
-            </p>
-          </div>
+      <CardContent className="space-y-6">
+        {/* Avatar Upload */}
+        <div className="pb-4 border-b border-zinc-100 dark:border-zinc-800">
+          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">
+            Profile Picture
+          </p>
+          <AvatarUpload
+            currentAvatarUrl={user?.avatarUrl}
+            userName={user?.name}
+            onAvatarChange={handleAvatarChange}
+            onAvatarRemove={handleAvatarRemove}
+          />
         </div>
 
         <Input
