@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "test": "node ./node_modules/jest/bin/jest.js --coverage",
     "build": "next build",
     "start": "next start",
     "lint": "prettier --check .",
